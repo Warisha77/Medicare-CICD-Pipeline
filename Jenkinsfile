@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // Lowercase image name so Trivy and Docker Hub parse it without errors
         IMAGE_NAME = 'warisha77/medicare-app'
         IMAGE_TAG  = "v1.${BUILD_NUMBER}"
         SERVER_IP  = 'ubuntu@13.60.183.125'
@@ -20,7 +19,6 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning repository for leaked secrets...'
-                    // Pipeline FAILS if any password/API key is found in code
                     sh '''
                         docker run --rm -v $(pwd):/repo \
                         zricethezav/gitleaks:latest detect \
@@ -34,7 +32,6 @@ pipeline {
             steps {
                 script {
                     echo 'Checking Dockerfile best practices...'
-                    // Warnings only - does not fail the pipeline (|| true)
                     sh 'docker run --rm -i hadolint/hadolint < Dockerfile || true'
                 }
             }
@@ -53,11 +50,13 @@ pipeline {
             steps {
                 script {
                     echo 'Scanning image for HIGH and CRITICAL vulnerabilities...'
-                    // --exit-code 1 => pipeline FAILS on critical vulnerabilities
+                    // Added --scanners vuln to skip secret scan and cached DB directory to prevent hangs
                     sh """
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v /var/jenkins_home/.cache/trivy:/root/.cache/ \
                         aquasec/trivy:latest image \
+                        --scanners vuln \
                         --severity HIGH,CRITICAL \
                         --exit-code 1 \
                         --no-progress \
@@ -89,7 +88,6 @@ pipeline {
                     sshagent(['ec2-server-key']) {
                         sh "mkdir -p ~/.ssh"
                         sh "ssh-keyscan -H ${SERVER_IP.split('@')[1]} >> ~/.ssh/known_hosts"
-                        // Copies docker-compose file (supports both .yml and .yaml)
                         sh "scp docker-compose.* ${SERVER_IP}:/home/ubuntu/"
                         sh "ssh ${SERVER_IP} 'sudo docker compose pull && sudo docker compose up -d'"
                     }
@@ -101,7 +99,6 @@ pipeline {
             steps {
                 script {
                     echo 'Verifying deployment...'
-                    // Wait for container to start, then check HTTP response
                     sh """
                         sleep 10
                         curl -f http://${SERVER_IP.split('@')[1]}:3000 > /dev/null 2>&1 \
