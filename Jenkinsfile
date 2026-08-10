@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'Warisha77/medicare-app'
+        // Lowercase image name so Trivy and Docker Hub parse it without errors
+        IMAGE_NAME = 'warisha77/medicare-app'
         IMAGE_TAG  = "v1.${BUILD_NUMBER}"
         SERVER_IP  = 'ubuntu@13.60.183.125'
     }
@@ -53,7 +54,7 @@ pipeline {
                 script {
                     echo 'Scanning image for HIGH and CRITICAL vulnerabilities...'
                     // --exit-code 1 => pipeline FAILS on critical vulnerabilities
-                    sh '''
+                    sh """
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         aquasec/trivy:latest image \
@@ -61,7 +62,7 @@ pipeline {
                         --exit-code 1 \
                         --no-progress \
                         ${IMAGE_NAME}:${IMAGE_TAG}
-                    '''
+                    """
                 }
             }
         }
@@ -88,7 +89,8 @@ pipeline {
                     sshagent(['ec2-server-key']) {
                         sh "mkdir -p ~/.ssh"
                         sh "ssh-keyscan -H ${SERVER_IP.split('@')[1]} >> ~/.ssh/known_hosts"
-                        sh "scp docker-compose.yaml ${SERVER_IP}:/home/ubuntu"
+                        // Copies docker-compose file (supports both .yml and .yaml)
+                        sh "scp docker-compose.* ${SERVER_IP}:/home/ubuntu/"
                         sh "ssh ${SERVER_IP} 'sudo docker compose pull && sudo docker compose up -d'"
                     }
                 }
@@ -99,7 +101,7 @@ pipeline {
             steps {
                 script {
                     echo 'Verifying deployment...'
-                    // Wait for container to start, then check HTTP 200
+                    // Wait for container to start, then check HTTP response
                     sh """
                         sleep 10
                         curl -f http://${SERVER_IP.split('@')[1]}:3000 > /dev/null 2>&1 \
