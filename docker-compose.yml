@@ -3,5 +3,5 @@ services:
     image: warisha77/medicare-app:latest
     ports:
      - "3000:80"
-    restart: until-stopped
+    restart: unless-stopped
   
